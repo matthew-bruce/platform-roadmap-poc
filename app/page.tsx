@@ -68,15 +68,22 @@ export default function Page() {
   const laneThemeMap = new Map<string, { lane: Swimlane; theme: Theme }>();
   roadmap.themes.forEach((theme) => theme.swimlanes.forEach((lane) => laneThemeMap.set(lane.id, { lane, theme })));
 
-  const updateRoadmap = (updater: (current: typeof roadmap) => typeof roadmap) => {
-    setStore((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        roadmaps: prev.roadmaps.map((r) => (r.id === roadmap.id ? updater(r) : r))
-      };
-    });
-  };
+ const updateRoadmap = (updater: (current: Roadmap) => Roadmap) => {
+  setStore((prev) => {
+    if (!prev) return prev;
+
+    const current = prev.roadmaps.find((r) => r.id === prev.activeRoadmapId);
+    if (!current) return prev;
+
+    const updated = updater(current);
+
+    return {
+      ...prev,
+      roadmaps: prev.roadmaps.map((r) => (r.id === updated.id ? updated : r)),
+      activeRoadmapId: updated.id,
+    };
+  });
+};
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over, delta } = event;
