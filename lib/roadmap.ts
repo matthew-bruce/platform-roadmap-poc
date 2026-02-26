@@ -1,11 +1,11 @@
 import { Archive, Banknote, CloudCog, ShieldCheck, type LucideIcon } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
-import type { Initiative, Roadmap, RoadmapStore } from "./types";
+import type { Initiative, Roadmap, Store } from "./types";
 
 export const STORAGE_KEY = "technology-roadmap-poc-v1";
 export const TIMELINE_START = new Date(2026, 0, 1);
 export const TOTAL_MONTHS = 18;
 export const MONTH_WIDTH = 128;
+export const uid = () => crypto.randomUUID();
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -39,7 +39,7 @@ export function quarterLabel(index: number) {
 export const clampMonth = (n: number) => Math.max(0, Math.min(TOTAL_MONTHS - 1, n));
 
 const init = (title: string, start: number, end: number, themeId: string, swimlaneId: string): Initiative => ({
-  id: uuidv4(),
+  id: uid(),
   title,
   startMonthIndex: start,
   endMonthIndex: end,
@@ -47,17 +47,17 @@ const init = (title: string, start: number, end: number, themeId: string, swimla
   swimlaneId
 });
 
-export function demoStore(): RoadmapStore {
-  const t1 = uuidv4();
-  const t2 = uuidv4();
-  const t3 = uuidv4();
-  const s11 = uuidv4();
-  const s12 = uuidv4();
-  const s21 = uuidv4();
-  const s31 = uuidv4();
+export function demoStore(): Store {
+  const t1 = uid();
+  const t2 = uid();
+  const t3 = uid();
+  const s11 = uid();
+  const s12 = uid();
+  const s21 = uid();
+  const s31 = uid();
 
   const roadmap: Roadmap = {
-    id: uuidv4(),
+    id: uid(),
     name: "Executive North Star",
     themes: [
       {
@@ -117,32 +117,32 @@ export function demoStore(): RoadmapStore {
       }
     ],
     globalMilestones: [
-      { id: uuidv4(), label: "Board Sign-off", monthIndex: 2 },
-      { id: uuidv4(), label: "Peak Readiness", monthIndex: 10, themeId: t1 }
+      { id: uid(), label: "Board Sign-off", monthIndex: 2 },
+      { id: uid(), label: "Peak Readiness", monthIndex: 10, themeId: t1 }
     ],
     attachedMilestones: [],
     freezeWindows: [
-      { id: uuidv4(), label: "Peak Change Freeze", startMonthIndex: 9, endMonthIndex: 11, scopeThemeIds: [] },
-      { id: uuidv4(), label: "DST Migration Window", startMonthIndex: 6, endMonthIndex: 7, scopeThemeIds: [t2] }
+      { id: uid(), label: "Peak Change Freeze", startMonthIndex: 9, endMonthIndex: 11, scopeThemeIds: [] },
+      { id: uid(), label: "DST Migration Window", startMonthIndex: 6, endMonthIndex: 7, scopeThemeIds: [t2] }
     ]
   };
 
   const firstInitiative = roadmap.themes[0].swimlanes[0].initiatives[0];
-  roadmap.attachedMilestones.push({ id: uuidv4(), label: "Pilot Live", offsetMonthsFromStart: 2, initiativeId: firstInitiative.id });
-  roadmap.attachedMilestones.push({ id: uuidv4(), label: "Scale Wave", offsetMonthsFromStart: 4, initiativeId: firstInitiative.id });
+  roadmap.attachedMilestones.push({ id: uid(), label: "Pilot Live", offsetMonthsFromStart: 2, initiativeId: firstInitiative.id });
+  roadmap.attachedMilestones.push({ id: uid(), label: "Scale Wave", offsetMonthsFromStart: 4, initiativeId: firstInitiative.id });
 
   const roadmap2: Roadmap = {
     ...roadmap,
-    id: uuidv4(),
+    id: uid(),
     name: "Ops Reinvention",
-    themes: roadmap.themes.map((t) => ({ ...t, id: uuidv4(), swimlanes: t.swimlanes.map((s) => ({ ...s, id: uuidv4(), initiatives: [] })) })),
+    themes: roadmap.themes.map((t) => ({ ...t, id: uid(), swimlanes: t.swimlanes.map((s) => ({ ...s, id: uid(), initiatives: [] })) })),
     globalMilestones: [],
     attachedMilestones: [],
     freezeWindows: []
   };
 
   return {
-    activeRoadmapId: roadmap.id,
+    selectedRoadmapId: roadmap.id,
     roadmaps: [roadmap, roadmap2]
   };
 }
