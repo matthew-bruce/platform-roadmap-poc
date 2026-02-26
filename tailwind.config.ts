@@ -1,22 +1,23 @@
-import type { Config } from "tailwindcss";
+import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx,mdx}"],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
         rm: {
-          red: "#DA202A",
-          redDark: "#B10F1A",
-          ink: "#141722",
-          slate: "#657089",
-          mist: "#EEF1F8",
-          surface: "#FAFBFF"
+          red: '#DA202A',
+          charcoal: '#1F2430',
+          slate: '#4A5568',
+          mist: '#EEF2F7',
+          steel: '#A0AEC0',
+          ice: '#F8FAFC',
+          plum: '#6B46C1',
+          teal: '#0F766E'
         }
       },
       boxShadow: {
-        soft: "0 10px 25px -12px rgba(20, 23, 34, 0.25)",
-        glow: "0 0 0 1px rgba(218, 32, 42, 0.18), 0 16px 40px -22px rgba(218, 32, 42, 0.55)"
+        soft: '0 12px 40px -18px rgba(31,36,48,.28)'
       }
     }
   },

@@ -1,352 +1,390 @@
-"use client";
+'use client';
 
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
   PointerSensor,
   useDraggable,
   useDroppable,
   useSensor,
-  useSensors,
-  closestCenter
-} from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
-import { v4 as uuidv4 } from "uuid";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
-import { MONTH_WIDTH, STORAGE_KEY, TOTAL_MONTHS, clampMonth, demoStore, fyLabel, iconMap, monthLabel, quarterLabel } from "@/lib/roadmap";
-import type { Initiative, Roadmap, RoadmapStore, Theme, Swimlane } from "@/lib/types";
+  useSensors
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { ChevronLeft, GripVertical, Plus } from 'lucide-react';
+import { clampMonth, getFyLabel, getRmgQuarter, MONTH_COUNT, MONTH_WIDTH, months } from '@/lib/date';
+import { iconMap, makeSeedStore, STORAGE_KEY } from '@/lib/data';
+import { Initiative, Roadmap, Store, Theme } from '@/lib/types';
 
-const headerHeight = 114;
-const laneHeight = 84;
+const uid = () => Math.random().toString(36).slice(2, 9);
 
-function useRoadmapStore() {
-  const [store, setStore] = useState<RoadmapStore | null>(null);
+type ActiveDrag = { type: string; id: string; title?: string } | null;
+
+export default function Home() {
+  const [store, setStore] = useState<Store | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeDrag, setActiveDrag] = useState<ActiveDrag>(null);
+  const [editing, setEditing] = useState<Initiative | null>(null);
+
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const seed = demoStore();
-      setStore(seed);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
-      return;
-    }
-    setStore(JSON.parse(raw));
+    setStore(raw ? JSON.parse(raw) : makeSeedStore());
   }, []);
 
   useEffect(() => {
     if (store) localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   }, [store]);
-  return [store, setStore] as const;
-}
 
-function SortableThemeItem({ theme, onRename }: { theme: Theme; onRename: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `theme:${theme.id}` });
-  return <button ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} {...attributes} {...listeners} onDoubleClick={onRename} className="w-full rounded-lg border border-slate-200 bg-white p-2 text-left text-sm">{theme.name}</button>;
-}
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  if (!store) return null;
 
-function SortableSwimlaneItem({ lane, themeId, onRename }: { lane: Swimlane; themeId: string; onRename: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `lane:${lane.id}`, data: { themeId } });
-  return <button ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} {...attributes} {...listeners} onDoubleClick={onRename} className="w-full rounded-md border border-slate-100 bg-slate-50 p-2 text-xs">{lane.swimlaneName}</button>;
-}
+  const roadmap = store.roadmaps.find((r) => r.id === store.selectedRoadmapId) ?? store.roadmaps[0];
 
-function InitiativeCard({ initiative, color }: { initiative: Initiative; color: string }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: `initiative:${initiative.id}` });
-  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), background: color }} {...attributes} {...listeners} className="h-10 rounded-lg px-3 py-2 text-xs font-semibold text-white shadow-soft">{initiative.title}</div>;
-}
+  const mutateRoadmap = (mutator: (r: Roadmap) => Roadmap) => {
+    setStore((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        roadmaps: prev.roadmaps.map((r) => (r.id === roadmap.id ? mutator(structuredClone(r)) : r))
+      };
+    });
+  };
 
-export default function Page() {
-  const [store, setStore] = useRoadmapStore();
-  const [collapsed, setCollapsed] = useState(false);
-  const [editingInitiative, setEditingInitiative] = useState<Initiative | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const findInit = (id: string) => {
+    for (const t of roadmap.themes) for (const s of t.swimlanes) for (const i of s.initiatives) if (i.id === id) return { t, s, i };
+    return null;
+  };
 
-  const roadmap = useMemo(() => store?.roadmaps.find((r) => r.id === store.activeRoadmapId), [store]);
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id);
+    if (id.startsWith('init-')) setActiveDrag({ type: 'initiative', id: id.slice(5), title: findInit(id.slice(5))?.i.title });
+    if (id.startsWith('theme-')) setActiveDrag({ type: 'theme', id: id.slice(6) });
+    if (id.startsWith('swim-')) setActiveDrag({ type: 'swimlane', id: id.slice(5) });
+    if (id.startsWith('gm-')) setActiveDrag({ type: 'global', id: id.slice(3) });
+  };
 
-  if (!store || !roadmap) return <main className="p-8">Loading…</main>;
-
-  const laneThemeMap = new Map<string, { lane: Swimlane; theme: Theme }>();
-  roadmap.themes.forEach((theme) => theme.swimlanes.forEach((lane) => laneThemeMap.set(lane.id, { lane, theme })));
-
- const updateRoadmap = (updater: (current: Roadmap) => Roadmap) => {
-  setStore((prev) => {
-    if (!prev) return prev;
-
-    const current = prev.roadmaps.find((r) => r.id === prev.activeRoadmapId);
-    if (!current) return prev;
-
-    const updated = updater(current);
-
-    return {
-      ...prev,
-      roadmaps: prev.roadmaps.map((r) => (r.id === updated.id ? updated : r)),
-      activeRoadmapId: updated.id,
-    };
-  });
-};
-
-  const onDragEnd = (event: DragEndEvent) => {
-    const { active, over, delta } = event;
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveDrag(null);
+    const active = String(e.active.id);
+    const over = e.over ? String(e.over.id) : null;
     if (!over) return;
-    const a = String(active.id);
-    const o = String(over.id);
 
-    if (a.startsWith("theme:") && o.startsWith("theme:")) {
-      const source = roadmap.themes.findIndex((t) => `theme:${t.id}` === a);
-      const target = roadmap.themes.findIndex((t) => `theme:${t.id}` === o);
-      if (source < 0 || target < 0 || source === target) return;
-      updateRoadmap((r) => ({ ...r, themes: arrayMove(r.themes, source, target) }));
+    if (active.startsWith('theme-') && over.startsWith('theme-') && active !== over) {
+      const a = roadmap.themes.findIndex((t) => t.id === active.slice(6));
+      const b = roadmap.themes.findIndex((t) => t.id === over.slice(6));
+      mutateRoadmap((r) => ({ ...r, themes: arrayMove(r.themes, a, b) }));
       return;
     }
 
-    if (a.startsWith("lane:") && o.startsWith("lane:") && a !== o) {
-      const laneId = a.split(":")[1];
-      const overLaneId = o.split(":")[1];
-      let sourceThemeIdx = -1;
-      let targetThemeIdx = -1;
-      let movingLane: Swimlane | null = null;
-      let targetIndex = 0;
-      roadmap.themes.forEach((theme, ti) => {
-        theme.swimlanes.forEach((lane, li) => {
-          if (lane.id === laneId) {
-            sourceThemeIdx = ti;
-            movingLane = lane;
-          }
-          if (lane.id === overLaneId) {
-            targetThemeIdx = ti;
-            targetIndex = li;
-          }
-        });
-      });
-      if (!movingLane || sourceThemeIdx < 0 || targetThemeIdx < 0) return;
-      updateRoadmap((r) => {
-        const themes = r.themes.map((t) => ({ ...t, swimlanes: [...t.swimlanes] }));
-        themes[sourceThemeIdx].swimlanes = themes[sourceThemeIdx].swimlanes.filter((l) => l.id !== laneId);
-        themes[targetThemeIdx].swimlanes.splice(targetIndex, 0, movingLane!);
-        themes[targetThemeIdx].swimlanes = themes[targetThemeIdx].swimlanes.map((lane) => ({ ...lane, initiatives: lane.initiatives.map((i) => ({ ...i, themeId: themes[targetThemeIdx].id, swimlaneId: lane.id })) }));
-        return { ...r, themes };
+    if (active.startsWith('swim-') && over.startsWith('swim-')) {
+      const sid = active.slice(5);
+      const oid = over.slice(5);
+      mutateRoadmap((r) => {
+        const all = r.themes.flatMap((t) => t.swimlanes.map((s) => ({ t, s })));
+        const src = all.find((x) => x.s.id === sid);
+        const dst = all.find((x) => x.s.id === oid);
+        if (!src || !dst) return r;
+        src.t.swimlanes = src.t.swimlanes.filter((s) => s.id !== sid);
+        const idx = dst.t.swimlanes.findIndex((s) => s.id === oid);
+        dst.t.swimlanes.splice(idx + 1, 0, src.s);
+        src.s.initiatives.forEach((i) => (i.themeId = dst.t.id));
+        return r;
       });
       return;
     }
 
-    if (a.startsWith("initiative:") && o.startsWith("lane-drop:")) {
-      const initiativeId = a.split(":")[1];
-      const laneId = o.split(":")[1];
-      const target = laneThemeMap.get(laneId);
-      if (!target) return;
-      const monthShift = Math.round(delta.x / MONTH_WIDTH);
-      updateRoadmap((r) => {
-        let found: Initiative | undefined;
-        const themes = r.themes.map((t) => ({ ...t, swimlanes: t.swimlanes.map((s) => ({ ...s, initiatives: s.initiatives.filter((i) => {
-          if (i.id === initiativeId) {
-            found = { ...i };
-            return false;
+    if (active.startsWith('init-')) {
+      const iid = active.slice(5);
+      const monthShift = Math.round((e.delta.x || 0) / MONTH_WIDTH);
+      mutateRoadmap((r) => {
+        let current: Initiative | undefined;
+        let sourceLane;
+        for (const t of r.themes) for (const s of t.swimlanes) {
+          const idx = s.initiatives.findIndex((x) => x.id === iid);
+          if (idx >= 0) {
+            current = s.initiatives[idx];
+            sourceLane = s;
+            s.initiatives.splice(idx, 1);
           }
-          return true;
-        }) })) }));
-        if (found === undefined) return r;
-        found.startMonthIndex = clampMonth(found.startMonthIndex + monthShift);
-        found.endMonthIndex = clampMonth(Math.max(found.startMonthIndex, found.endMonthIndex + monthShift));
-        found.themeId = target.theme.id;
-        found.swimlaneId = target.lane.id;
-        const t = themes.find((x) => x.id === target.theme.id);
-        const l = t?.swimlanes.find((x) => x.id === target.lane.id);
-        if (l) l.initiatives.push(found);
-        return { ...r, themes };
+        }
+        if (!current || !sourceLane) return r;
+        const dur = current.endMonthIndex - current.startMonthIndex;
+        const ns = clampMonth(current.startMonthIndex + monthShift);
+        current.startMonthIndex = ns;
+        current.endMonthIndex = clampMonth(ns + dur);
+
+        const laneId = over.startsWith('lane-') ? over.slice(5) : current.swimlaneId;
+        const target = r.themes.flatMap((t) => t.swimlanes.map((s) => ({ t, s }))).find((x) => x.s.id === laneId);
+        if (target) {
+          current.swimlaneId = target.s.id;
+          current.themeId = target.t.id;
+          target.s.initiatives.push(current);
+        } else {
+          sourceLane.initiatives.push(current);
+        }
+        return r;
       });
       return;
     }
 
-    if (a.startsWith("gm:") && o === "timeline-drop") {
-      const id = a.split(":")[1];
-      const monthShift = Math.round(delta.x / MONTH_WIDTH);
-      updateRoadmap((r) => ({ ...r, globalMilestones: r.globalMilestones.map((m) => (m.id === id ? { ...m, monthIndex: clampMonth(m.monthIndex + monthShift) } : m)) }));
+    if (active.startsWith('gm-')) {
+      const gid = active.slice(3);
+      const monthShift = Math.round((e.delta.x || 0) / MONTH_WIDTH);
+      mutateRoadmap((r) => {
+        const g = r.globalMilestones.find((x) => x.id === gid);
+        if (g) g.monthIndex = clampMonth(g.monthIndex + monthShift);
+        return r;
+      });
     }
   };
 
-  const months = [...Array(TOTAL_MONTHS)].map((_, i) => i);
+  const addTheme = () => mutateRoadmap((r) => ({ ...r, themes: [...r.themes, { id: uid(), name: 'New Theme', color: '#DA202A', icon: 'Activity', swimlanes: [] }] }));
+  const addLane = () => mutateRoadmap((r) => {
+    if (!r.themes[0]) return r;
+    r.themes[0].swimlanes.push({ id: uid(), swimlaneName: 'New Swimlane', teamName: 'Team', supplierName: 'Supplier', initiatives: [] });
+    return r;
+  });
+  const addInit = () => mutateRoadmap((r) => {
+    const t = r.themes[0]; const s = t?.swimlanes[0]; if (!t || !s) return r;
+    s.initiatives.push({ id: uid(), title: 'New Initiative', startMonthIndex: 0, endMonthIndex: 2, themeId: t.id, swimlaneId: s.id });
+    return r;
+  });
+  const addGlobalMilestone = () => mutateRoadmap((r) => { r.globalMilestones.push({ id: uid(), label: 'New Gate', monthIndex: 0 }); return r; });
+  const addFreeze = () => mutateRoadmap((r) => { r.freezeWindows.push({ id: uid(), label: 'New Freeze', startMonthIndex: 8, endMonthIndex: 9, scopeThemeIds: [] }); return r; });
+
+  const createRoadmap = () => {
+    const name = prompt('Roadmap name');
+    if (!name) return;
+    const fresh = makeSeedStore().roadmaps[0];
+    fresh.id = uid();
+    fresh.name = name;
+    setStore((p) => p ? { ...p, roadmaps: [...p.roadmaps, fresh], selectedRoadmapId: fresh.id } : p);
+  };
+
+  const renameRoadmap = () => {
+    const name = prompt('Rename roadmap', roadmap.name);
+    if (!name) return;
+    mutateRoadmap((r) => ({ ...r, name }));
+  };
+
+  const deleteRoadmap = () => {
+    if (!confirm(`Delete ${roadmap.name}?`)) return;
+    setStore((p) => {
+      if (!p || p.roadmaps.length === 1) return p;
+      const roadmaps = p.roadmaps.filter((r) => r.id !== roadmap.id);
+      return { roadmaps, selectedRoadmapId: roadmaps[0].id };
+    });
+  };
+
+  const resetRoadmap = () => {
+    const ack = prompt('Type RESET to restore demo data for current roadmap only');
+    if (ack !== 'RESET') return;
+    const seeded = makeSeedStore().roadmaps[0];
+    mutateRoadmap((r) => ({ ...seeded, id: r.id, name: r.name }));
+  };
 
   return (
-    <main className="flex h-screen overflow-hidden bg-gradient-to-br from-white to-rm-mist">
-      <aside className={`${collapsed ? "w-16" : "w-80"} border-r border-white/70 bg-white/80 p-4 backdrop-blur transition-all`}>
-        <button onClick={() => setCollapsed((v) => !v)} className="mb-4 rounded-md border p-2">{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
-        {!collapsed && <>
-          <h1 className="mb-2 text-lg font-semibold">Technology Roadmap</h1>
-          <select value={roadmap.id} onChange={(e) => setStore((s) => s && ({ ...s, activeRoadmapId: e.target.value }))} className="mb-3 w-full rounded-lg border p-2 text-sm">
-            {store.roadmaps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-          <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
-            <button onClick={() => { const name = prompt("New roadmap name"); if (!name) return; const n = demoStore().roadmaps[0]; n.id = uuidv4(); n.name = name; setStore((s) => s && ({ ...s, roadmaps: [...s.roadmaps, n], activeRoadmapId: n.id })); }} className="rounded bg-rm-ink px-2 py-1 text-white">Create</button>
-            <button onClick={() => { const name = prompt("Rename roadmap", roadmap.name); if (!name) return; updateRoadmap((r) => ({ ...r, name })); }} className="rounded bg-slate-800 px-2 py-1 text-white">Rename</button>
-            <button onClick={() => { if (store.roadmaps.length < 2) return; if (!confirm("Delete this roadmap?")) return; setStore((s) => s && ({ ...s, roadmaps: s.roadmaps.filter((r) => r.id !== roadmap.id), activeRoadmapId: s.roadmaps.find((r) => r.id !== roadmap.id)!.id })); }} className="rounded bg-rm-red px-2 py-1 text-white">Delete</button>
-          </div>
-
-          <div className="mb-2 flex items-center justify-between text-sm font-medium"><span>Themes & Lanes</span><button className="rounded border p-1" onClick={() => updateRoadmap((r) => ({ ...r, themes: [...r.themes, { id: uuidv4(), name: "New Theme", color: "#6777ef", icon: "Archive", swimlanes: [] }] }))}><Plus size={14} /></button></div>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={roadmap.themes.map((t) => `theme:${t.id}`)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {roadmap.themes.map((theme) => (
-                  <div key={theme.id} className="rounded-lg border border-slate-200 p-2">
-                    <SortableThemeItem theme={theme} onRename={() => { const name = prompt("Theme name", theme.name); if (name) updateRoadmap((r) => ({ ...r, themes: r.themes.map((t) => (t.id === theme.id ? { ...t, name } : t)) })); }} />
-                    <div className="mt-2 space-y-2 pl-2">
-                      <SortableContext items={theme.swimlanes.map((l) => `lane:${l.id}`)} strategy={verticalListSortingStrategy}>
-                        {theme.swimlanes.map((lane) => <SortableSwimlaneItem key={lane.id} lane={lane} themeId={theme.id} onRename={() => { const name = prompt("Swimlane name", lane.swimlaneName); if (name) updateRoadmap((r) => ({ ...r, themes: r.themes.map((t) => ({ ...t, swimlanes: t.swimlanes.map((s) => (s.id === lane.id ? { ...s, swimlaneName: name } : s)) })) })); }} />)}
-                      </SortableContext>
-                      <button onClick={() => updateRoadmap((r) => ({ ...r, themes: r.themes.map((t) => (t.id !== theme.id ? t : { ...t, swimlanes: [...t.swimlanes, { id: uuidv4(), swimlaneName: "New Swimlane", teamName: "Team", supplierName: "Supplier", initiatives: [] }] })) }))} className="w-full rounded-md border border-dashed p-1 text-xs">+ Swimlane</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-            <button onClick={() => updateRoadmap((r) => ({ ...r, globalMilestones: [...r.globalMilestones, { id: uuidv4(), label: "New Milestone", monthIndex: 0 }] }))} className="rounded border p-2">+ Milestone</button>
-            <button onClick={() => updateRoadmap((r) => ({ ...r, freezeWindows: [...r.freezeWindows, { id: uuidv4(), label: "Change Freeze", startMonthIndex: 2, endMonthIndex: 4, scopeThemeIds: [] }] }))} className="rounded border p-2">+ Freeze</button>
-            <button onClick={() => { const text = prompt('Type RESET to reset current roadmap'); if (text !== 'RESET') return; const reset = demoStore().roadmaps[0]; reset.id = roadmap.id; reset.name = roadmap.name; updateRoadmap(() => reset); }} className="col-span-2 rounded bg-rm-red px-2 py-2 text-white">Reset demo data</button>
-          </div>
-        </>}
-      </aside>
-
-      <section className="relative flex-1 overflow-auto p-6">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <TimelineDrop>
-            <div className="relative min-w-max rounded-2xl border border-white bg-white shadow-glow" style={{ width: TOTAL_MONTHS * MONTH_WIDTH + 260 }}>
-              <div className="sticky top-0 z-30 bg-white">
-                <div className="sticky top-0 z-40 grid border-b" style={{ gridTemplateColumns: `260px repeat(${TOTAL_MONTHS}, ${MONTH_WIDTH}px)` }}>
-                  <div className="border-r p-3 text-xs font-semibold uppercase text-rm-slate">Portfolio</div>
-                  {months.map((i) => <div key={i} className="border-r p-2 text-center text-xs font-semibold text-rm-slate">{monthLabel(i)}</div>)}
-                </div>
-                <div className="grid border-b bg-slate-50" style={{ gridTemplateColumns: `260px repeat(${TOTAL_MONTHS}, ${MONTH_WIDTH}px)` }}>
-                  <div className="border-r p-2 text-xs text-rm-slate">Quarter</div>
-                  {months.map((i) => <div key={i} className="border-r p-1 text-center text-xs">{quarterLabel(i)}</div>)}
-                </div>
-                <div className="grid border-b bg-slate-100" style={{ gridTemplateColumns: `260px repeat(${TOTAL_MONTHS}, ${MONTH_WIDTH}px)` }}>
-                  <div className="border-r p-2 text-xs text-rm-slate">Financial Year</div>
-                  {months.map((i) => <div key={i} className="border-r p-1 text-center text-xs">{fyLabel(i)}</div>)}
-                </div>
-              </div>
-
-              <div className="relative">
-                {roadmap.themes.map((theme) => (
-                  <div key={theme.id} className="border-b">
-                    <div className="flex items-center gap-2 border-b px-4 py-3" style={{ backgroundColor: `${theme.color}15` }}>
-                      {(() => { const Icon = iconMap[theme.icon] ?? iconMap.Archive; return <Icon size={16} color={theme.color} />; })()}
-                      <span className="font-semibold" style={{ color: theme.color }}>{theme.name}</span>
-                    </div>
-                    {theme.swimlanes.map((lane) => <LaneRow key={lane.id} lane={lane} theme={theme} attached={roadmap.attachedMilestones} onEdit={(i) => setEditingInitiative(i)} onResize={(id, side, deltaX) => updateRoadmap((r) => ({ ...r, themes: r.themes.map((t) => ({ ...t, swimlanes: t.swimlanes.map((s) => ({ ...s, initiatives: s.initiatives.map((i) => {
-                      if (i.id !== id) return i;
-                      const shift = Math.round(deltaX / MONTH_WIDTH);
-                      if (side === "left") {
-                        const start = clampMonth(i.startMonthIndex + shift);
-                        return { ...i, startMonthIndex: Math.min(start, i.endMonthIndex) };
-                      }
-                      const end = clampMonth(i.endMonthIndex + shift);
-                      return { ...i, endMonthIndex: Math.max(i.startMonthIndex, end) };
-                    }) })) })) }))} />)}
-                  </div>
-                ))}
-
-                {roadmap.freezeWindows.map((f) => <FreezeBand key={f.id} freeze={f} roadmap={roadmap} />)}
-                <GlobalMilestones milestones={roadmap.globalMilestones} roadmap={roadmap} />
-              </div>
+    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <main className="h-screen w-screen flex overflow-hidden">
+        <aside className={`${sidebarOpen ? 'w-80' : 'w-14'} border-r border-slate-200 bg-white/90 backdrop-blur transition-all`}>
+          <button className="m-3 rounded-lg border p-2" onClick={() => setSidebarOpen((s) => !s)}><ChevronLeft className={`${sidebarOpen ? '' : 'rotate-180'} transition-transform`} size={16} /></button>
+          {sidebarOpen && <div className="px-4 pb-5 space-y-3 text-sm">
+            <h1 className="text-lg font-semibold">Technology Roadmap</h1>
+            <select value={roadmap.id} onChange={(e) => setStore((p) => p ? { ...p, selectedRoadmapId: e.target.value } : p)} className="w-full rounded-lg border p-2">
+              {store.roadmaps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={createRoadmap} className="rounded bg-rm-charcoal text-white p-2">Create</button>
+              <button onClick={renameRoadmap} className="rounded border p-2">Rename</button>
+              <button onClick={deleteRoadmap} className="rounded border border-red-300 text-red-600 p-2">Delete</button>
+              <button onClick={resetRoadmap} className="rounded border border-amber-400 text-amber-700 p-2">Reset demo</button>
             </div>
-          </TimelineDrop>
-        </DndContext>
-      </section>
+            <div className="border-t pt-3 space-y-2">
+              {[['Theme', addTheme], ['Swimlane', addLane], ['Initiative', addInit], ['Milestone', addGlobalMilestone], ['Freeze', addFreeze]].map(([label, fn]) => (
+                <button key={label} onClick={fn as () => void} className="w-full rounded-lg border p-2 flex items-center gap-2"><Plus size={14} />Add {label}</button>
+              ))}
+            </div>
+          </div>}
+        </aside>
 
-      {editingInitiative && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30">
-          <div className="w-[440px] rounded-xl bg-white p-5 shadow-soft">
-            <h3 className="mb-3 text-lg font-semibold">Edit initiative</h3>
-            <input value={editingInitiative.title} onChange={(e) => setEditingInitiative({ ...editingInitiative, title: e.target.value })} className="mb-2 w-full rounded border p-2" />
-            <div className="grid grid-cols-2 gap-2"><input type="number" min={0} max={17} value={editingInitiative.startMonthIndex} onChange={(e) => setEditingInitiative({ ...editingInitiative, startMonthIndex: Number(e.target.value) })} className="rounded border p-2" /><input type="number" min={0} max={17} value={editingInitiative.endMonthIndex} onChange={(e) => setEditingInitiative({ ...editingInitiative, endMonthIndex: Number(e.target.value) })} className="rounded border p-2" /></div>
-            <div className="mt-4 flex justify-end gap-2"><button onClick={() => setEditingInitiative(null)} className="rounded border px-3 py-1">Cancel</button><button onClick={() => {
-              updateRoadmap((r) => ({ ...r, themes: r.themes.map((t) => ({ ...t, swimlanes: t.swimlanes.map((s) => ({ ...s, initiatives: s.initiatives.map((i) => (i.id === editingInitiative.id ? editingInitiative : i)) })) })) }));
-              setEditingInitiative(null);
-            }} className="rounded bg-rm-red px-3 py-1 text-white">Save</button></div>
+        <section className="flex-1 overflow-auto bg-gradient-to-b from-white to-rm-mist/50">
+          <div className="min-w-max" style={{ width: MONTH_COUNT * MONTH_WIDTH + 420 }}>
+            <Header />
+            <div className="relative px-4 pb-10">
+              {roadmap.freezeWindows.map((f) => <Freeze key={f.id} freeze={f} roadmap={roadmap} />)}
+              <div className="sticky top-[108px] z-20 h-12 bg-white/85 backdrop-blur border-b flex items-center">
+                {roadmap.globalMilestones.map((m) => <GlobalMilestoneDot key={m.id} m={m} themeColor={m.themeId ? roadmap.themes.find((t) => t.id === m.themeId)?.color : '#1F2430'} />)}
+              </div>
+              <SortableContext items={roadmap.themes.map((t) => `theme-${t.id}`)} strategy={verticalListSortingStrategy}>
+                {roadmap.themes.map((theme) => <ThemeBlock key={theme.id} theme={theme} roadmap={roadmap} setEditing={setEditing} mutateRoadmap={mutateRoadmap} />)}
+              </SortableContext>
+            </div>
           </div>
-        </div>
-      )}
-    </main>
+        </section>
+      </main>
+
+      <DragOverlay>{activeDrag ? <div className="rounded-lg bg-rm-charcoal text-white px-3 py-2 text-sm shadow-soft">{activeDrag.title ?? activeDrag.type}</div> : null}</DragOverlay>
+      {editing && <EditModal initiative={editing} onClose={() => setEditing(null)} onSave={(s, e, title) => {
+        mutateRoadmap((r) => {
+          for (const t of r.themes) for (const l of t.swimlanes) {
+            const i = l.initiatives.find((x) => x.id === editing.id);
+            if (i) {
+              i.startMonthIndex = clampMonth(Math.min(s, e));
+              i.endMonthIndex = clampMonth(Math.max(s, e));
+              i.title = title;
+            }
+          }
+          return r;
+        });
+        setEditing(null);
+      }} />}
+    </DndContext>
   );
 }
 
-function TimelineDrop({ children }: { children: React.ReactNode }) {
-  const { setNodeRef } = useDroppable({ id: "timeline-drop" });
-  return <div ref={setNodeRef}>{children}</div>;
-}
+function Header() {
+  const spans = useMemo(() => {
+    const build = (fn: (i: number) => string) => {
+      const arr: { label: string; start: number; end: number }[] = [];
+      months.forEach((_, idx) => {
+        const label = fn(idx);
+        const prev = arr[arr.length - 1];
+        if (prev?.label === label) prev.end = idx;
+        else arr.push({ label, start: idx, end: idx });
+      });
+      return arr;
+    };
+    return { fy: build(getFyLabel), q: build((i) => `${getFyLabel(i)} ${getRmgQuarter(i)}`) };
+  }, []);
 
-function LaneRow({ lane, theme, attached, onEdit, onResize }: { lane: Swimlane; theme: Theme; attached: { id: string; label: string; offsetMonthsFromStart: number; initiativeId: string }[]; onEdit: (i: Initiative) => void; onResize: (id: string, side: "left" | "right", deltaX: number) => void }) {
-  const { setNodeRef } = useDroppable({ id: `lane-drop:${lane.id}` });
-  return (
-    <div ref={setNodeRef} className="relative grid border-b" style={{ gridTemplateColumns: `260px repeat(${TOTAL_MONTHS}, ${MONTH_WIDTH}px)`, minHeight: laneHeight }}>
-      <div className="border-r bg-slate-50/80 p-3">
-        <div className="text-sm font-medium">{lane.swimlaneName}</div>
-        <div className="text-xs text-rm-slate">{lane.teamName} · {lane.supplierName}</div>
-      </div>
-      {Array.from({ length: TOTAL_MONTHS }).map((_, i) => <div key={i} className="border-r border-slate-100" />)}
-      {lane.initiatives.map((i) => {
-        const left = 260 + i.startMonthIndex * MONTH_WIDTH + 4;
-        const width = (i.endMonthIndex - i.startMonthIndex + 1) * MONTH_WIDTH - 8;
-        return (
-          <div key={i.id} className="absolute top-5" style={{ left, width }} onDoubleClick={() => onEdit(i)}>
-            <div className="group relative">
-              <InitiativeCard initiative={i} color={theme.color} />
-              <button onPointerDown={(e) => dragResize(e, (dx) => onResize(i.id, "left", dx))} className="absolute left-0 top-0 h-10 w-1 cursor-ew-resize rounded-l bg-white/30" />
-              <button onPointerDown={(e) => dragResize(e, (dx) => onResize(i.id, "right", dx))} className="absolute right-0 top-0 h-10 w-1 cursor-ew-resize rounded-r bg-white/30" />
-            </div>
-            <div className="mt-1 flex gap-2">
-              {attached.filter((m) => m.initiativeId === i.id).map((m) => {
-                const milestoneX = m.offsetMonthsFromStart * MONTH_WIDTH;
-                return <div key={m.id} className="absolute -top-3" style={{ left: milestoneX }}><div className="h-3 w-3 rounded-full border-2 border-white" style={{ background: theme.color }} /><div className="text-[10px] text-rm-slate">{m.label}</div></div>;
-              })}
-            </div>
-          </div>
-        );
-      })}
+  return <div className="sticky top-0 z-30 bg-white border-b shadow-sm">
+    {[spans.fy, spans.q].map((line, idx) => <div key={idx} className="flex h-9 border-b">
+      <div className="w-[360px] sticky left-0 bg-white z-10 border-r px-4 flex items-center text-xs uppercase tracking-wide text-slate-500">{idx === 0 ? 'Financial year' : 'Quarter (RMG)'}</div>
+      {line.map((s) => <div key={s.label + s.start} className="border-r flex items-center justify-center text-xs font-medium" style={{ width: (s.end - s.start + 1) * MONTH_WIDTH }}>{s.label}</div>)}
+    </div>)}
+    <div className="flex h-10">
+      <div className="w-[360px] sticky left-0 bg-white z-10 border-r px-4 flex items-center text-xs uppercase tracking-wide text-slate-500">Month</div>
+      {months.map((m, i) => <div key={i} className="border-r flex items-center justify-center text-sm" style={{ width: MONTH_WIDTH }}>{m.label}</div>)}
     </div>
-  );
+  </div>;
 }
 
-function GlobalMilestones({ milestones, roadmap }: { milestones: { id: string; label: string; monthIndex: number; themeId?: string }[]; roadmap: { themes: Theme[] } }) {
-  return (
-    <>
-      {milestones.map((m) => <GlobalMilestoneNode key={m.id} milestone={m} color={roadmap.themes.find((t) => t.id === m.themeId)?.color ?? "#DA202A"} />)}
-    </>
-  );
+function ThemeBlock({ theme, roadmap, mutateRoadmap, setEditing }: { theme: Theme; roadmap: Roadmap; mutateRoadmap: (m: (r: Roadmap) => Roadmap) => void; setEditing: (i: Initiative) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `theme-${theme.id}` });
+  const Icon = (iconMap as Record<string, any>)[theme.icon] || iconMap.Activity;
+
+  return <section ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="mt-4 rounded-2xl border bg-white shadow-soft overflow-hidden">
+    <div className="h-14 border-b flex items-center px-4 gap-3" style={{ borderLeft: `5px solid ${theme.color}` }}>
+      <button {...attributes} {...listeners}><GripVertical size={14} /></button>
+      <Icon size={16} style={{ color: theme.color }} />
+      <input value={theme.name} onChange={(e) => mutateRoadmap((r) => { const t = r.themes.find((x) => x.id === theme.id); if (t) t.name = e.target.value; return r; })} className="font-semibold bg-transparent outline-none" />
+      <input type="color" value={theme.color} onChange={(e) => mutateRoadmap((r) => { const t = r.themes.find((x) => x.id === theme.id); if (t) t.color = e.target.value; return r; })} className="ml-auto" />
+      <select value={theme.icon} onChange={(e) => mutateRoadmap((r) => { const t = r.themes.find((x) => x.id === theme.id); if (t) t.icon = e.target.value; return r; })} className="rounded border p-1 text-xs">
+        {Object.keys(iconMap).map((k) => <option key={k}>{k}</option>)}
+      </select>
+    </div>
+    <SortableContext items={theme.swimlanes.map((s) => `swim-${s.id}`)} strategy={verticalListSortingStrategy}>
+      {theme.swimlanes.map((lane) => <SwimlaneRow key={lane.id} lane={lane} theme={theme} roadmap={roadmap} mutateRoadmap={mutateRoadmap} setEditing={setEditing} />)}
+    </SortableContext>
+  </section>;
 }
 
-function GlobalMilestoneNode({ milestone, color }: { milestone: { id: string; label: string; monthIndex: number }; color: string }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: `gm:${milestone.id}` });
-  return <div ref={setNodeRef} {...attributes} {...listeners} className="absolute z-20" style={{ left: 260 + milestone.monthIndex * MONTH_WIDTH + MONTH_WIDTH / 2 - 6 + (transform?.x ?? 0), top: headerHeight + 4 + (transform?.y ?? 0) }}><div className="h-3 w-3 rounded-full border-2 border-white shadow" style={{ backgroundColor: color }} /><div className="-ml-3 text-[10px] font-medium">{milestone.label}</div></div>;
+function SwimlaneRow({ lane, theme, roadmap, mutateRoadmap, setEditing }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `swim-${lane.id}` });
+  const { setNodeRef: dropRef } = useDroppable({ id: `lane-${lane.id}` });
+
+  return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="border-b last:border-b-0">
+    <div ref={dropRef} className="flex min-h-[84px]">
+      <div className="w-[360px] sticky left-0 bg-white z-10 border-r p-3 text-xs flex gap-2 items-start">
+        <button {...attributes} {...listeners}><GripVertical size={14} /></button>
+        <div>
+          <p className="font-semibold">{lane.swimlaneName}</p>
+          <p className="text-slate-500">{lane.teamName} · {lane.supplierName}</p>
+        </div>
+      </div>
+      <div className="relative" style={{ width: MONTH_WIDTH * MONTH_COUNT }}>
+        <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${MONTH_COUNT}, ${MONTH_WIDTH}px)` }}>{months.map((_, i) => <div key={i} className="border-r border-slate-100" />)}</div>
+        {lane.initiatives.map((initiative: Initiative) => <InitiativeBar key={initiative.id} initiative={initiative} theme={theme} roadmap={roadmap} mutateRoadmap={mutateRoadmap} setEditing={setEditing} />)}
+      </div>
+    </div>
+  </div>;
 }
 
-function FreezeBand({ freeze, roadmap }: { freeze: { id: string; label: string; startMonthIndex: number; endMonthIndex: number; scopeThemeIds: string[] }; roadmap: { themes: Theme[] } }) {
-  const left = 260 + freeze.startMonthIndex * MONTH_WIDTH;
-  const width = (freeze.endMonthIndex - freeze.startMonthIndex + 1) * MONTH_WIDTH;
-  let top = headerHeight;
-  const scopes = freeze.scopeThemeIds.length ? freeze.scopeThemeIds : roadmap.themes.map((t) => t.id);
+function InitiativeBar({ initiative, theme, roadmap, mutateRoadmap, setEditing }: any) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: `init-${initiative.id}` });
+  const left = initiative.startMonthIndex * MONTH_WIDTH;
+  const width = (initiative.endMonthIndex - initiative.startMonthIndex + 1) * MONTH_WIDTH - 8;
+  const attached = roadmap.attachedMilestones.filter((m: any) => m.initiativeId === initiative.id);
+
+  const resize = (edge: 'left' | 'right', ev: any) => {
+    ev.stopPropagation();
+    const startX = ev.clientX;
+    const originS = initiative.startMonthIndex;
+    const originE = initiative.endMonthIndex;
+    const onMove = (me: MouseEvent) => {
+      const delta = Math.round((me.clientX - startX) / MONTH_WIDTH);
+      mutateRoadmap((r) => {
+        for (const t of r.themes) for (const s of t.swimlanes) {
+          const i = s.initiatives.find((x) => x.id === initiative.id);
+          if (i) {
+            if (edge === 'left') i.startMonthIndex = clampMonth(Math.min(originE, originS + delta));
+            else i.endMonthIndex = clampMonth(Math.max(originS, originE + delta));
+          }
+        }
+        return r;
+      });
+    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  return <div ref={setNodeRef} {...attributes} {...listeners} onDoubleClick={() => setEditing(initiative)} style={{ transform: CSS.Translate.toString(transform), left, width, background: theme.color }} className="absolute top-5 h-10 rounded-lg px-3 text-white text-sm font-medium flex items-center cursor-grab shadow-soft">
+    <button onMouseDown={(e) => resize('left', e)} className="absolute -left-1 top-0 h-full w-2 rounded bg-white/70" />
+    <span className="truncate">{initiative.title}</span>
+    <button onMouseDown={(e) => resize('right', e)} className="absolute -right-1 top-0 h-full w-2 rounded bg-white/70" />
+    {attached.map((m: any) => <div key={m.id} className="absolute -top-3" style={{ left: m.offsetMonthsFromStart * MONTH_WIDTH + 8 }}>
+      <div className="h-3 w-3 rounded-full border-2 border-white" style={{ background: theme.color }} />
+      <div className="text-[10px] text-slate-700 mt-0.5 whitespace-nowrap">{m.label}</div>
+    </div>)}
+  </div>;
+}
+
+function GlobalMilestoneDot({ m, themeColor }: any) {
+  const { setNodeRef, attributes, listeners, transform } = useDraggable({ id: `gm-${m.id}` });
+  return <div ref={setNodeRef} {...attributes} {...listeners} style={{ left: m.monthIndex * MONTH_WIDTH + 356, transform: CSS.Translate.toString(transform) }} className="absolute top-4 cursor-grab">
+    <div className="h-4 w-4 rounded-full" style={{ background: themeColor || '#1F2430' }} />
+    <div className="text-[11px] mt-1 whitespace-nowrap">{m.label}</div>
+  </div>;
+}
+
+function Freeze({ freeze, roadmap }: any) {
+  const top = 160;
+  const hPerTheme = 140;
+  if (!freeze.scopeThemeIds.length) {
+    return <div className="absolute z-[1] rounded-lg border border-amber-300/50 bg-amber-100/35 pointer-events-none" style={{ left: freeze.startMonthIndex * MONTH_WIDTH + 360, width: (freeze.endMonthIndex - freeze.startMonthIndex + 1) * MONTH_WIDTH, top, height: roadmap.themes.length * hPerTheme }}><div className="text-[10px] p-1 text-amber-800">{freeze.label}</div></div>;
+  }
   return <>
-    {roadmap.themes.map((t) => {
-      const rows = 1 + t.swimlanes.length;
-      const h = rows * laneHeight;
-      const render = scopes.includes(t.id);
-      const el = render ? <div key={t.id + freeze.id} className="pointer-events-none absolute z-10" style={{ left, top, width, height: h }}><div className="h-full border border-rm-red/20 bg-rm-red/10 p-1 text-xs text-rm-red">{freeze.label}</div></div> : null;
-      top += h;
-      return el;
-    })}
+    {roadmap.themes.map((t: any, idx: number) => freeze.scopeThemeIds.includes(t.id) ? <div key={t.id} className="absolute z-[1] rounded-lg border border-amber-300/50 bg-amber-100/35 pointer-events-none" style={{ left: freeze.startMonthIndex * MONTH_WIDTH + 360, width: (freeze.endMonthIndex - freeze.startMonthIndex + 1) * MONTH_WIDTH, top: top + idx * hPerTheme, height: hPerTheme - 8 }}><div className="text-[10px] p-1 text-amber-800">{freeze.label}</div></div> : null)}
   </>;
 }
 
-function dragResize(e: React.PointerEvent<HTMLButtonElement>, onDelta: (dx: number) => void) {
-  e.preventDefault();
-  const start = e.clientX;
-  const move = (ev: PointerEvent) => onDelta(ev.clientX - start);
-  const up = () => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
+function EditModal({ initiative, onClose, onSave }: { initiative: Initiative; onClose: () => void; onSave: (s: number, e: number, t: string) => void }) {
+  const [title, setTitle] = useState(initiative.title);
+  const [start, setStart] = useState(initiative.startMonthIndex);
+  const [end, setEnd] = useState(initiative.endMonthIndex);
+  return <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-5 w-[420px] space-y-3">
+      <h2 className="font-semibold">Edit initiative</h2>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded border p-2" />
+      <div className="grid grid-cols-2 gap-2">
+        <select value={start} onChange={(e) => setStart(Number(e.target.value))} className="rounded border p-2">{months.map((m, i) => <option key={i} value={i}>{m.label}</option>)}</select>
+        <select value={end} onChange={(e) => setEnd(Number(e.target.value))} className="rounded border p-2">{months.map((m, i) => <option key={i} value={i}>{m.label}</option>)}</select>
+      </div>
+      <div className="flex justify-end gap-2"><button className="px-3 py-2" onClick={onClose}>Cancel</button><button className="rounded bg-rm-red text-white px-3 py-2" onClick={() => onSave(start, end, title)}>Save</button></div>
+    </div>
+  </div>;
 }

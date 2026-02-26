@@ -1,41 +1,36 @@
-# Technology Roadmap PoC
+# Technology Roadmap PoC (Next.js + TypeScript + Tailwind)
 
-Minimal Next.js (App Router) + TypeScript + Tailwind CSS proof of concept for an executive-style technology roadmap.
+A premium-styled executive roadmap canvas with:
 
-## Features
+- Sticky FY / RMG quarter / month timeline bands.
+- Horizontal timeline (Jan 2026 → Jun 2027, 18 months).
+- Theme + swimlane + initiative planning model.
+- Drag/drop and resize interactions powered by `@dnd-kit`.
+- Global and attached milestones.
+- Freeze window overlays.
+- Local-only persistence in `localStorage`.
 
-- Sticky 3-band timeline header: Financial Year, RMG quarters, and month labels.
-- 18-month default range: Jan 2026 → Jun 2027.
-- Collapsible sidebar with roadmap controls and add actions.
-- Local-only persistence in `localStorage` (`technology-roadmap-poc-v1`).
-- Demo data seeded on first load.
-- Drag/drop powered by `@dnd-kit`:
-  - Reorder themes.
-  - Reorder/move swimlanes across themes.
-  - Move initiatives across lanes/themes and shift timing by month.
-  - Drag global milestones horizontally.
-- Initiative resizing (left/right) snapped to month grid.
-- Double-click initiative edit modal (title + exact month indices).
-- Freeze window overlays with optional theme scoping.
-- Attached milestones that stay anchored to initiative bars.
-
-## Install and run
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open `http://localhost:3000`.
+Open: http://localhost:3000
 
-## Build
+## Controls included
 
-```bash
-npm run build
-npm start
-```
+- Roadmap selector + create / rename / delete (with confirmation).
+- Collapsible sidebar.
+- Add theme / swimlane / initiative / milestone / freeze.
+- Initiative drag (horizontal timing + cross-lane/theme move), resize, and double-click edit modal.
+- Swimlane and theme reordering.
+- Global milestone horizontal drag.
+- Reset demo data for current roadmap only (requires typing `RESET`).
 
-## Notes
+## Persistence
 
-- This PoC intentionally keeps all data client-side and local-only.
-- "Reset demo data" only resets the currently selected roadmap and requires typing `RESET`.
+All data is stored under one localStorage key:
+
+- `roadmap-poc-v1`

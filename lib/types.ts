@@ -7,6 +7,20 @@ export type Initiative = {
   swimlaneId: string;
 };
 
+export type AttachedMilestone = {
+  id: string;
+  label: string;
+  offsetMonthsFromStart: number;
+  initiativeId: string;
+};
+
+export type GlobalMilestone = {
+  id: string;
+  label: string;
+  monthIndex: number;
+  themeId?: string;
+};
+
 export type Swimlane = {
   id: string;
   swimlaneName: string;
@@ -23,20 +37,6 @@ export type Theme = {
   swimlanes: Swimlane[];
 };
 
-export type MilestoneGlobal = {
-  id: string;
-  label: string;
-  monthIndex: number;
-  themeId?: string;
-};
-
-export type MilestoneAttached = {
-  id: string;
-  label: string;
-  offsetMonthsFromStart: number;
-  initiativeId: string;
-};
-
 export type FreezeWindow = {
   id: string;
   label: string;
@@ -50,11 +50,11 @@ export type Roadmap = {
   name: string;
   themes: Theme[];
   freezeWindows: FreezeWindow[];
-  globalMilestones: MilestoneGlobal[];
-  attachedMilestones: MilestoneAttached[];
+  globalMilestones: GlobalMilestone[];
+  attachedMilestones: AttachedMilestone[];
 };
 
-export type RoadmapStore = {
-  activeRoadmapId: string;
+export type Store = {
   roadmaps: Roadmap[];
+  selectedRoadmapId: string;
 };

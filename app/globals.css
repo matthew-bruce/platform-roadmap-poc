@@ -7,5 +7,20 @@
 }
 
 body {
-  @apply bg-rm-mist text-rm-ink;
+  @apply bg-rm-ice text-rm-charcoal antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
