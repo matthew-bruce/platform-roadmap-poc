@@ -1,5 +1,5 @@
 import { Activity, Boxes, CloudCog, ShieldCheck, WalletCards } from 'lucide-react';
-import { Store } from './types';
+import type { Store, Initiative, GlobalMilestone, AttachedMilestone } from './types';
 
 export const STORAGE_KEY = 'roadmap-poc-v1';
 
@@ -29,14 +29,14 @@ export const makeSeedStore = (): Store => {
             swimlaneName: 'Payments Platform',
             teamName: 'Core Platforms',
             supplierName: 'Capgemini',
-            initiatives: []
+            initiatives: [] as Initiative[],
           },
           {
             id: uid(),
             swimlaneName: 'Digital Front Door',
             teamName: 'Channels',
             supplierName: 'Thoughtworks',
-            initiatives: []
+            initiatives: [] as Initiative[],
           }
         ]
       },
@@ -51,7 +51,7 @@ export const makeSeedStore = (): Store => {
             swimlaneName: 'Identity Services',
             teamName: 'Security',
             supplierName: 'Accenture',
-            initiatives: []
+            initiatives: [] as Initiative[],
           }
         ]
       },
@@ -66,7 +66,7 @@ export const makeSeedStore = (): Store => {
             swimlaneName: 'Data Foundation',
             teamName: 'Data Office',
             supplierName: 'BJSS',
-            initiatives: []
+            initiatives: [] as Initiative[],
           }
         ]
       }
@@ -75,8 +75,8 @@ export const makeSeedStore = (): Store => {
       { id: uid(), label: 'Peak Change Freeze', startMonthIndex: 10, endMonthIndex: 11, scopeThemeIds: [] },
       { id: uid(), label: 'DST Migration Window', startMonthIndex: 4, endMonthIndex: 5, scopeThemeIds: [] }
     ],
-    globalMilestones: [] as any[],
-    attachedMilestones: [] as any[]
+    globalMilestones: [] as GlobalMilestone[],
+    attachedMilestones: [] as AttachedMilestone[]
   };
 
   const lanes = r1.themes.flatMap((t) => t.swimlanes.map((s) => ({ t, s })));
