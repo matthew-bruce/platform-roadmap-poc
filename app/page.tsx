@@ -340,7 +340,7 @@ function InitiativeBar({ initiative, theme, roadmap, mutateRoadmap, setEditing }
     const originE = initiative.endMonthIndex;
     const onMove = (me: MouseEvent) => {
       const delta = Math.round((me.clientX - startX) / MONTH_WIDTH);
-      mutateRoadmap((r) => {
+      mutateRoadmap((r: Roadmap) => {
         for (const t of r.themes) for (const s of t.swimlanes) {
           const i = s.initiatives.find((x) => x.id === initiative.id);
           if (i) {
