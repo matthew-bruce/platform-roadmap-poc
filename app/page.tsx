@@ -136,7 +136,7 @@ export default function Page() {
       if (!target) return;
       const monthShift = Math.round(delta.x / MONTH_WIDTH);
       updateRoadmap((r) => {
-        let found: Initiative | null = null;
+        let found: Initiative | undefined;
         const themes = r.themes.map((t) => ({ ...t, swimlanes: t.swimlanes.map((s) => ({ ...s, initiatives: s.initiatives.filter((i) => {
           if (i.id === initiativeId) {
             found = { ...i };
@@ -144,7 +144,7 @@ export default function Page() {
           }
           return true;
         }) })) }));
-        if (!found) return r;
+        if (found === undefined) return r;
         found.startMonthIndex = clampMonth(found.startMonthIndex + monthShift);
         found.endMonthIndex = clampMonth(Math.max(found.startMonthIndex, found.endMonthIndex + monthShift));
         found.themeId = target.theme.id;
