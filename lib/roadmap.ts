@@ -142,7 +142,7 @@ export function demoStore(): Store {
   };
 
   return {
-    activeRoadmapId: roadmap.id,
+    selectedRoadmapId: roadmap.id,
     roadmaps: [roadmap, roadmap2]
   };
 }
