@@ -1,5 +1,5 @@
 import { Archive, Banknote, CloudCog, ShieldCheck, type LucideIcon } from "lucide-react";
-import type { Initiative, Roadmap, RoadmapStore } from "./types";
+import type { Initiative, Roadmap, Store } from "./types";
 
 export const STORAGE_KEY = "technology-roadmap-poc-v1";
 export const TIMELINE_START = new Date(2026, 0, 1);
@@ -47,7 +47,7 @@ const init = (title: string, start: number, end: number, themeId: string, swimla
   swimlaneId
 });
 
-export function demoStore(): RoadmapStore {
+export function demoStore(): Store {
   const t1 = uid();
   const t2 = uid();
   const t3 = uid();
