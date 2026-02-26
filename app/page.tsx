@@ -16,7 +16,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } 
 import { v4 as uuidv4 } from "uuid";
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { MONTH_WIDTH, STORAGE_KEY, TOTAL_MONTHS, clampMonth, demoStore, fyLabel, iconMap, monthLabel, quarterLabel } from "@/lib/roadmap";
-import type { Initiative, RoadmapStore, Theme, Swimlane } from "@/lib/types";
+import type { Initiative, Roadmap, RoadmapStore, Theme, Swimlane } from "@/lib/types";
 
 const headerHeight = 114;
 const laneHeight = 84;
