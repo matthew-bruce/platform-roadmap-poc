@@ -203,9 +203,23 @@ export default function Home() {
               <button onClick={resetRoadmap} className="rounded border border-amber-400 text-amber-700 p-2">Reset demo</button>
             </div>
             <div className="border-t pt-3 space-y-2">
-              {[['Theme', addTheme], ['Swimlane', addLane], ['Initiative', addInit], ['Milestone', addGlobalMilestone], ['Freeze', addFreeze]].map(([label, fn]) => (
-                <button key={label} onClick={fn as () => void} className="w-full rounded-lg border p-2 flex items-center gap-2"><Plus size={14} />Add {label}</button>
-              ))}
+              {(
+  [
+    { label: "Theme", onClick: addTheme },
+    { label: "Swimlane", onClick: addLane },
+    { label: "Initiative", onClick: addInit },
+    { label: "Milestone", onClick: addGlobalMilestone },
+    { label: "Freeze", onClick: addFreeze },
+  ] as const
+).map(({ label, onClick }) => (
+  <button
+    key={label}
+    onClick={onClick}
+    className="w-full rounded-lg border p-2 flex items-center gap-2"
+  >
+    <Plus size={14} /> Add {label}
+  </button>
+))}
             </div>
           </div>}
         </aside>
