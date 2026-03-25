@@ -8,7 +8,7 @@
 
 A roadmapping tool for RMG's Platform & Build function. It replaces PowerPoint-based roadmaps with a structured, live, interactive alternative — allowing the team to maintain, filter, and present platform roadmaps without the manual overhead of keeping slides up to date.
 
-**Live URL:** [add your Vercel URL here]
+**Live URL:** https://platform-roadmap-poc.vercel.app
 **Status:** PoC — two variants built, rewrite in progress with Claude
 **Stack:** React (Vite), [Supabase / localStorage], Vercel
 
